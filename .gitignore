@@ -1,0 +1,13 @@
+node_modules/
+.milkman/
+
+# OpenAPI specs may contain sensitive internal API details
+openapi.yaml
+openapi.json
+
+# macOS
+.DS_Store
+
+.agent-profile/
+.claude/
+.envrc
