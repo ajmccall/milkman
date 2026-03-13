@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
+import path from 'path'
 import { readConfig, readCollection } from '../lib/storage.ts'
-import { executeRequest } from '../lib/executor.ts'
-import { methodColor } from '../lib/format.ts'
+import { executeRequest, buildCurlDisplayCommand } from '../lib/executor.ts'
+import { methodColor, formatJson } from '../lib/format.ts'
 import ListView from './ListView.tsx'
 import DetailView from './DetailView.tsx'
 import ParamInputView from './ParamInputView.tsx'
 import ResponseView from './ResponseView.tsx'
+import ExecutingView from './ExecutingView.tsx'
 import PromptView from './PromptView.tsx'
 import { ensureDir, writeConfig, writeCollection } from '../lib/storage.ts'
 import { parseOpenApi } from '../lib/parser.ts'
@@ -18,7 +20,7 @@ type AppView =
   | { type: 'list' }
   | { type: 'detail'; request: ApiRequest }
   | { type: 'param-input'; request: ApiRequest; params: ParamInput[] }
-  | { type: 'executing'; request: ApiRequest }
+  | { type: 'executing'; request: ApiRequest; curlCommand: string; startTime: number }
   | { type: 'response'; request: ApiRequest; result: ExecutionResult }
   | { type: 'import-prompt' }
   | { type: 'config-prompt' }
@@ -67,7 +69,11 @@ function buildParamInputs(request: ApiRequest): ParamInput[] {
   return inputs
 }
 
-export default function App() {
+interface AppProps {
+  onOpenInPager?: (body: string) => void
+}
+
+export default function App({ onOpenInPager }: AppProps = {}) {
   const { exit } = useApp()
   const [view, setView] = useState<AppView>({ type: 'loading' })
   const [collection, setCollection] = useState<Collection | null>(null)
@@ -123,6 +129,16 @@ export default function App() {
       if (input === 'b' || key.escape) {
         setView({ type: 'list' })
       }
+      if (input === 'o' && onOpenInPager) {
+        onOpenInPager(formatJson(view.result.body))
+        exit()
+      }
+      if (input === 'e' && config?.editor) {
+        const filePath = path.join(process.cwd(), '.milkman', 'last-response.json')
+        Bun.write(filePath, formatJson(view.result.body)).then(() => {
+          Bun.spawn([...config.editor!.split(' '), filePath])
+        })
+      }
     }
   }, { isActive: !isTextInputActive })
 
@@ -131,7 +147,8 @@ export default function App() {
       setView({ type: 'error', message: 'No base URL configured. Run: milkman config url <url>' })
       return
     }
-    setView({ type: 'executing', request })
+    const curlCommand = buildCurlDisplayCommand(request, config, paramValues)
+    setView({ type: 'executing', request, curlCommand, startTime: Date.now() })
     const result = await executeRequest(request, config, paramValues)
     setView({ type: 'response', request, result })
   }
@@ -206,14 +223,11 @@ export default function App() {
 
       case 'executing':
         return (
-          <Box gap={1}>
-            <Text color="cyan">Executing</Text>
-            <Text color={methodColor(view.request.method) as Parameters<typeof Text>[0]['color']} bold>
-              {view.request.method}
-            </Text>
-            <Text>{view.request.path}</Text>
-            <Text color="gray">...</Text>
-          </Box>
+          <ExecutingView
+            request={view.request}
+            curlCommand={view.curlCommand}
+            startTime={view.startTime}
+          />
         )
 
       case 'response':
@@ -221,6 +235,7 @@ export default function App() {
           <ResponseView
             request={view.request}
             result={view.result}
+            hasEditor={!!config?.editor}
             onBack={() => setView({ type: 'list' })}
           />
         )

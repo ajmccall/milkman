@@ -44,6 +44,16 @@ export interface Config {
   baseUrl: string
   collectionName?: string
   importedAt?: string
+  editor?: string
+}
+
+export interface RequestTimings {
+  dnsMs: number       // DNS lookup
+  tcpMs: number       // TCP connect (delta)
+  tlsMs: number       // TLS handshake (delta, 0 for HTTP)
+  serverMs: number    // server processing / time to first byte (delta)
+  transferMs: number  // content download (delta)
+  totalMs: number     // wall-clock total
 }
 
 export interface ExecutionResult {
@@ -51,6 +61,7 @@ export interface ExecutionResult {
   body: string
   latencyMs: number
   curlCommand: string
+  timings?: RequestTimings
   error?: string
 }
 

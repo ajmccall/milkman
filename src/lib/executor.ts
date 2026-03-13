@@ -1,4 +1,4 @@
-import type { ApiRequest, Config, ExecutionResult } from '../types.ts'
+import type { ApiRequest, Config, ExecutionResult, RequestTimings } from '../types.ts'
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
@@ -41,7 +41,7 @@ export function buildCurlArgs(
     args.push('-d', buildBody(request, paramValues) ?? '{}')
   }
 
-  args.push('-w', '\n__MM_STATUS__%{http_code}__%{time_total}__')
+  args.push('-w', '\n__MM_STATUS__%{http_code}__%{time_namelookup}__%{time_connect}__%{time_appconnect}__%{time_starttransfer}__%{time_total}__')
   return args
 }
 
@@ -90,9 +90,26 @@ export async function executeRequest(
     const body = rawOutput.slice(0, markerIndex)
     const meta = rawOutput.slice(markerIndex + marker.length)
     const metaParts = meta.replace(/__$/, '').split('__')
-    const statusCode = parseInt(metaParts[0] ?? '0', 10)
 
-    return { statusCode, body, latencyMs, curlCommand }
+    const statusCode = parseInt(metaParts[0] ?? '0', 10)
+    const s = (i: number) => parseFloat(metaParts[i] ?? '0') * 1000
+
+    const dns     = s(1)
+    const connect = s(2)
+    const tls     = s(3)
+    const ttfb    = s(4)
+    const total   = s(5)
+
+    const timings: RequestTimings = {
+      dnsMs:      Math.round(dns),
+      tcpMs:      Math.round(connect - dns),
+      tlsMs:      Math.round(tls - connect),
+      serverMs:   Math.round(ttfb - Math.max(tls, connect)),
+      transferMs: Math.round(total - ttfb),
+      totalMs:    Math.round(total),
+    }
+
+    return { statusCode, body, latencyMs, curlCommand, timings }
   } catch (err) {
     return {
       statusCode: 0,

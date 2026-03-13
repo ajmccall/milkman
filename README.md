@@ -8,7 +8,8 @@ A lightweight terminal UI for exploring and executing API requests from an OpenA
 - **Arrow-key TUI** — navigate endpoints, inspect parameters, and fire requests without leaving the terminal
 - **Example values pre-filled** — request body and query params are populated from the spec's example values, so you can hit Enter and go
 - **Executes via `curl`** — see the exact curl command that ran, get formatted JSON output with status code and latency
-- **Per-project config** — base URL and collection stored in `.milkman/` alongside your project
+- **Long response handling** — responses over 100 lines are never dumped to the terminal; open them in a pager or your editor instead
+- **Per-project config** — base URL, editor, and collection stored in `.milkman/` alongside your project
 
 ## Requirements
 
@@ -21,30 +22,49 @@ A lightweight terminal UI for exploring and executing API requests from an OpenA
 git clone https://github.com/ajmccall/milkman.git
 cd milkman
 bun install
+bun link
+```
+
+`bun link` registers the `milkman` command globally via `~/.bun/bin`. Make sure `~/.bun/bin` is in your `PATH`:
+
+```bash
+export PATH="$HOME/.bun/bin:$PATH"
 ```
 
 ## Usage
 
-### 1. Import an OpenAPI spec
+### Import an OpenAPI spec
 
 ```bash
-bun src/index.tsx import path/to/openapi.yaml
+milkman import path/to/openapi.yaml
 ```
 
 Parses the spec, writes the collection to `.milkman/`, and launches the TUI.
 
-### 2. Set your base URL
+### Set your base URL
 
 ```bash
-bun src/index.tsx config url https://api.example.com
+milkman config url https://api.example.com
 ```
 
 Or press `c` inside the TUI.
 
-### 3. Launch the TUI
+### Set your editor
 
 ```bash
-bun src/index.tsx
+milkman config editor subl
+```
+
+Supports any command that accepts a file path as its last argument — e.g. `subl`, `code`, `vim`, `nano`. Flags are supported too:
+
+```bash
+milkman config editor "code -n"
+```
+
+### Launch the TUI
+
+```bash
+milkman
 ```
 
 ## TUI controls
@@ -57,6 +77,15 @@ bun src/index.tsx
 | `i` | Import a new OpenAPI file |
 | `c` | Change base URL |
 | `q` | Quit |
+
+### Response view
+
+| Key | Action |
+|-----|--------|
+| `o` | Open response in pager (`$PAGER`, defaults to `less`) |
+| `e` | Open response in configured editor (writes to `.milkman/last-response.json`) |
+
+Responses longer than 100 lines are not displayed inline — you'll see the line count and the options above instead.
 
 ## How it works
 
@@ -71,6 +100,7 @@ TUI: select endpoint
   → prompts for required inputs (pre-filled with spec examples)
   → builds and runs: curl -s -X POST "https://..." -d '{"key":"value"}'
   → displays formatted JSON response with status code and latency
+  → long responses (100+ lines) open in pager or editor instead
 ```
 
 ## Project structure
@@ -92,8 +122,9 @@ src/
     ResponseView.tsx    # response display
     PromptView.tsx      # generic text prompt (import / config)
 .milkman/
-  config.json        # base URL
+  config.json        # base URL, editor command
   collection.json    # parsed endpoint collection
+  last-response.json # most recent response body (written when opening in editor)
 ```
 
 ## Tech stack
